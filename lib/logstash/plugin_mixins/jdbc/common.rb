@@ -9,6 +9,11 @@ module LogStash module PluginMixins module Jdbc
     # makes the lock redundant although it does not hurt to have it around.
     DRIVERS_LOADING_LOCK = java.util.concurrent.locks.ReentrantLock.new()
 
+    def wtf_handle_trace
+      @logger.info("ZZEM wtf_handle_trace; pipeline #{execution_context.pipeline_id()}")
+
+    end
+
     def complete_sequel_opts(defaults = {})
       sequel_opts = @sequel_opts.
           map { |key,val| [key.is_a?(String) ? key.to_sym : key, val] }.
@@ -33,7 +38,11 @@ module LogStash module PluginMixins module Jdbc
       begin
         load_driver_jars
         begin
-          @driver_impl = load_jdbc_driver_class
+          @driver_impl = load_class(@jdbc_driver_class)
+          # TODO make class name configurable
+          # XXX/LEFT OFF listen on server, intercept & handle trace when one comes
+          @mysql_server_impl = load_class("com.mysql.cj.jdbc.MysqlServer").new
+
         rescue => e # catch java.lang.ClassNotFoundException, potential errors
           # (e.g. ExceptionInInitializerError or LinkageError) won't get caught
           message = if jdbc_driver_library_set?
@@ -74,9 +83,10 @@ module LogStash module PluginMixins module Jdbc
       !@jdbc_driver_library.nil? && !@jdbc_driver_library.empty?
     end
 
-    def load_jdbc_driver_class
+    # Class and all its transitive deps should be in the driver jar
+    def load_class(class_name)
       # sub a potential: 'Java::org::my.Driver' to 'org.my.Driver'
-      klass = @jdbc_driver_class.gsub('::', '.').sub(/^Java\./, '')
+      klass = class_name.gsub('::', '.').sub(/^Java\./, '')
       # NOTE: JRuby's Java::JavaClass.for_name which considers the custom class-loader(s)
       # in 9.3 the API changed and thus to avoid surprises we go down to the Java API :
       klass = JRuby.runtime.getJavaSupport.loadJavaClass(klass) # throws ClassNotFoundException
