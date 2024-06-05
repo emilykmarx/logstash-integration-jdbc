@@ -120,6 +120,7 @@ module LogStash module Filters class JdbcStreaming < LogStash::Filters::Base
     end
     @statement_handler = LogStash::PluginMixins::JdbcStreaming::StatementHandler.build_statement_handler(self)
     prepare_jdbc_connection
+    wtf_register
   end
 
   def filter(event)

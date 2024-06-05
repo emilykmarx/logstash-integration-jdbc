@@ -29,6 +29,7 @@ Gem::Specification.new do |s|
   # Restrict use of this plugin to versions of Logstash where support for integration plugins is present.
   s.add_runtime_dependency "logstash-core", ">= 6.5.0"
   s.add_runtime_dependency 'logstash-codec-plain'
+  # Don't change path here - not allowed
   s.add_runtime_dependency 'sequel'
   s.add_runtime_dependency 'lru_redux' # lru cache with ttl
 

@@ -2,6 +2,11 @@ require 'jruby'
 
 module LogStash module PluginMixins module Jdbc
   module Common
+    # XXX make these configurable
+    # Each database has a wtf_init table
+    WTF_INIT_TABLE_NAME = "wtf_init"
+    WTF_INIT_TABLE_ENDPOINT_COL = "endpoint"
+    WTF_LOCAL_MYSQL_SERVER_PORT = 3307
 
     private
 
@@ -9,9 +14,38 @@ module LogStash module PluginMixins module Jdbc
     # makes the lock redundant although it does not hurt to have it around.
     DRIVERS_LOADING_LOCK = java.util.concurrent.locks.ReentrantLock.new()
 
+    def wtf_register
+      # XXX require all plugins to impl wtf_register(), and call it in ls core after register()
+
+      # Start a WTF MySql server, register it with the database
+      # XXX when server get trace, call the trace handler here (need to pass this class to Java, or just impl the server here...)
+
+      # XXX (later) support non-mysql jdbc dbs (choose server impl based on db used for data)
+      # XXX (later) could consider moving the logic here and in the trace handler into the jdbc driver
+      # (possibly using an interceptor)
+      @mysql_server = @mysql_server_impl.new(WTF_LOCAL_MYSQL_SERVER_PORT)
+      @mysql_server.start()
+      @database.run("CREATE TABLE IF NOT EXISTS #{WTF_INIT_TABLE_NAME} (
+        #{WTF_INIT_TABLE_ENDPOINT_COL} VARCHAR(2000) # TODO support bodies
+        );")
+      # XXX get local mysql server IP
+      @database.run("INSERT INTO #{WTF_INIT_TABLE_NAME} (#{WTF_INIT_TABLE_ENDPOINT_COL}) VALUES (
+        \"localhost:#{WTF_LOCAL_MYSQL_SERVER_PORT}\"
+        );")
+    end
+
+    # Use Sequel to connect to upstream WTF mysql servers
     def wtf_handle_trace
       @logger.info("ZZEM wtf_handle_trace; pipeline #{execution_context.pipeline_id()}")
-
+      scheme = @jdbc_connection_string.split("//")[0]
+      @database["SELECT #{WTF_INIT_TABLE_ENDPOINT_COL.to_sym} FROM #{WTF_INIT_TABLE_NAME.to_sym}"].all do |wtf_endpoint|
+        wtf_conn_string = scheme + "//" + wtf_endpoint[WTF_INIT_TABLE_ENDPOINT_COL.to_sym] + "?useSSL=false"
+        begin
+          upstream_wtf_mysql_server = Sequel.connect(wtf_conn_string)
+        rescue => e
+          @logger.warn("WTF trace handler failed to connect to upstream #{wtf_conn_string}", :exception => e.message)
+        end
+      end
     end
 
     def complete_sequel_opts(defaults = {})
@@ -40,8 +74,7 @@ module LogStash module PluginMixins module Jdbc
         begin
           @driver_impl = load_class(@jdbc_driver_class)
           # TODO make class name configurable
-          # XXX/LEFT OFF listen on server, intercept & handle trace when one comes
-          @mysql_server_impl = load_class("com.mysql.cj.jdbc.MysqlServer").new
+          @mysql_server_impl = load_class("com.mysql.cj.jdbc.MysqlServer")
 
         rescue => e # catch java.lang.ClassNotFoundException, potential errors
           # (e.g. ExceptionInInitializerError or LinkageError) won't get caught

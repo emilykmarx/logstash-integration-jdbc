@@ -11,3 +11,4 @@ if Dir.exist?(logstash_path) && use_logstash_source
 end
 
 gem 'rufus-scheduler', ENV['RUFUS_SCHEDULER_VERSION'] if ENV['RUFUS_SCHEDULER_VERSION']
+gem 'sequel', path: "/home/emily/projects/wtf_project/sequel"

@@ -59,6 +59,9 @@ module LogStash module PluginMixins module JdbcStreaming
   def prepare_jdbc_connection
     load_driver
 
+    # LEFT OFF:
+    # logstash-core calls a wtf_handle_trace in this repo
+    # ...which connects to JDBC with the special string, which the interceptor notices and uses to gather stored state on conns
     @database = Sequel.connect(@jdbc_connection_string, complete_sequel_opts)
     if @jdbc_validate_connection
       @database.extension(:connection_validator)
@@ -71,4 +74,5 @@ module LogStash module PluginMixins module JdbcStreaming
       raise e
     end
   end # def prepare_jdbc_connection
+
 end end end
